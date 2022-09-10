@@ -1,17 +1,27 @@
-const express = require("express");
-const app = express();
-const path = require("path");
-app.use("/dist", express.static("dist"));
-
+//TODO - separate out to db folder
 const Sequelize = require("sequelize");
 const { UUID, UUIDV4, STRING } = Sequelize;
 const conn = new Sequelize(
   process.env.DATABASE_URL || "postgres://localhost/acme_hr_2207"
 );
+const express = require("express");
+const app = express();
+const path = require("path");
+app.use(express.json());
+
+app.use("/dist", express.static("dist"));
 
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
-app.get("api/users", async (req, res, next) => {
+app.post("/api/users", async (req, res, next) => {
+  try {
+    res.status(201).send(await User.create(req.body));
+  } catch (ex) {
+    next(ex);
+  }
+});
+
+app.get("/api/users", async (req, res, next) => {
   try {
     res.send(await User.findAll());
   } catch (ex) {
@@ -19,7 +29,7 @@ app.get("api/users", async (req, res, next) => {
   }
 });
 
-app.get("api/departments", async (req, res, next) => {
+app.get("/api/departments", async (req, res, next) => {
   try {
     res.send(await Department.findAll());
   } catch (ex) {
@@ -48,13 +58,20 @@ const Department = conn.define("department", {
     defaultValue: UUIDV4,
     primaryKey: true,
   },
+  name: {
+    type: STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+    },
+  },
 });
 
 User.belongsTo(Department);
 Department.hasMany(User);
 
 const init = async () => {
-  console.log("starting");
+  console.log("start");
   try {
     await conn.sync({ force: true });
     const [moe, lucy, larry, ethyl, hr, engineering, finance] =
@@ -72,15 +89,11 @@ const init = async () => {
     larry.departmentId = hr.id;
 
     await Promise.all([lucy.save(), ethyl.save(), larry.save()]);
-    // await User.findAll({ include: [Department]})
-    // await Department.findAll({ include: [User]})
     console.log("done seeding");
     const port = process.env.PORT || 3000;
-    app.listen(port, () => {
-      console.log(`listening on port ${port}`);
-    });
-  } catch (err) {
-    console.log(err);
+    app.listen(port, () => console.log(`listening on port ${port}`));
+  } catch (ex) {
+    console.log(ex);
   }
 };
 
